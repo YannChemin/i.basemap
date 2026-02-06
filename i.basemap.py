@@ -25,7 +25,7 @@
 #% key: server
 #% type: string
 #% required: no
-#% options: Google_Satellite,OpenStreetMap,Bing_Aerial
+#% options: Google_Satellite,OpenStreetMap,Bing_Aerial,ESRI_WorldImagery,USGS_Topo,Google_Terrain,Google_Hybrid,Bing_Roads,Stamen_Terrain,Stamen_Toner,Stamen_Watercolor,OpenTopoMap,OSM_Humanitarian,Natural_Earth,USGS_NAIP,USGS_3DEP,USGS_Hydro,ESA_WorldCover,Copernicus_Sentinel,Landsat,MODIS,NOAA_Climate,ESA_Climate,WorldBank,UN_GeoWeb
 #% answer: OpenStreetMap
 #% description: Web map server to use
 #%end
@@ -200,29 +200,29 @@ WEB_MAP_SERVERS = {
     },
     'Natural_Earth': {
         'name': 'National Geographic World Map',
-        'url': 'https://services.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/WMS',
-        'type': 'wms',
+        'url': 'https://services.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}',
+        'type': 'xyz',
         'max_zoom': 16,
         'format': 'png'
     },
     'USGS_NAIP': {
         'name': 'USGS NAIP Imagery',
-        'url': 'https://imagery.nationalmap.gov/arcgis/services/USGSNAIPImagery/MapServer/WMSServer',
-        'type': 'wms',
+        'url': 'https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/MapServer/tile/{z}/{y}/{x}',
+        'type': 'xyz',
         'max_zoom': 18,
         'format': 'jpeg'
     },
     'USGS_3DEP': {
         'name': 'USGS 3D Elevation Program',
-        'url': 'https://elevation.nationalmap.gov/arcgis/services/3DEPElevation/ImageServer/WMSServer',
-        'type': 'wms',
+        'url': 'https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/tile/{z}/{y}/{x}',
+        'type': 'xyz',
         'max_zoom': 15,
         'format': 'tiff'
     },
     'USGS_Hydro': {
         'name': 'USGS Hydrography',
-        'url': 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer/WMS',
-        'type': 'wms',
+        'url': 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer/tile/{z}/{y}/{x}',
+        'type': 'xyz',
         'max_zoom': 16,
         'format': 'png'
     },
@@ -623,6 +623,35 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
         import shutil
         shutil.rmtree(temp_dir, ignore_errors=True)
 
+def download_wms_tiles(url_template, bbox, output, maxcols, maxrows, srs, format):
+    """Download WMS tiles using GRASS r.in.wms"""
+    gs.message("Downloading WMS data using GRASS r.in.wms...")
+    gs.message(f"WMS URL: {url_template}")
+    gs.message(f"Bounding box: {bbox}")
+    
+    # Build WMS parameters for r.in.wms
+    wms_params = {
+        'url': url_template,
+        'layers': '0',  # Default layer - can be customized
+        'output': output,
+        'format': format,
+        'maxcols': maxcols,
+        'maxrows': maxrows,
+        'wms_version': '1.1.1',
+        'method': 'nearest',
+        'flags': 'o'  # Overwrite
+    }
+    
+    # Set region to current computational region (r.in.wms uses region, not bbox)
+    if not gs.find_file('region', element='windows')['name']:
+        gs.warning("No current region set, using default")
+    
+    try:
+        gs.run_command('r.in.wms', **wms_params)
+        gs.message(f"Successfully downloaded WMS data as '{output}'")
+    except Exception as e:
+        gs.fatal(f"Failed to download WMS data: {str(e)}")
+
 def main():
     options, flags = gs.parser()
     
@@ -640,15 +669,21 @@ def main():
     srs = options['srs']
     format = options['format']
     
-    # Get URL
+    # Get URL and server type
     if url:
         # Use custom URL
         tile_url = url
         server_name = "Custom"
+        server_type = "xyz"  # Assume XYZ for custom URLs
     else:
         # Use predefined server
-        tile_url = get_server_url(server)
-        server_name = WEB_MAP_SERVERS[server]['name']
+        if server not in WEB_MAP_SERVERS:
+            gs.fatal(f"Server '{server}' not found. Use -l flag to list available servers.")
+        
+        server_info = WEB_MAP_SERVERS[server]
+        tile_url = server_info['url']
+        server_name = server_info['name']
+        server_type = server_info['type']
     
     # Get bounding box
     if flags['c']:
@@ -663,8 +698,11 @@ def main():
     gs.message(f"Format: {format}")
     gs.message(f"Max size: {maxcols}x{maxrows}")
     
-    # Download tiles
-    download_xyz_tiles(tile_url, bbox, output, maxcols, maxrows, srs, format)
+    # Download based on server type
+    if server_type.lower() == 'wms':
+        download_wms_tiles(tile_url, bbox, output, maxcols, maxrows, srs, format)
+    else:
+        download_xyz_tiles(tile_url, bbox, output, maxcols, maxrows, srs, format)
     
     # Add metadata to the map
     if gs.find_file(name=output, element='raster')['file']:

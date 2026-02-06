@@ -4,17 +4,6 @@
 
 The `i.basemap` module provides a comprehensive interface for downloading and importing base map data from **25 freely available web map servers**. It supports both XYZ tiles and WMS services with robust error handling, randomized downloads, and retry logic.
 
-## Features
-
-- **🗺️ Comprehensive Catalog**: 25 freely available web map servers
-- **🎲 Randomized Downloads**: Prevents rate limiting by randomizing tile download order
-- **🔄 Retry Logic**: 3 attempts per tile with timeouts for reliability
-- **⚡ Fast Processing**: Basic image validation for speed
-- **🎯 Accurate Coordinates**: Fixed tile coordinate calculation
-- **🌍 Multiple Standards**: Support for XYZ tiles and WMS services
-- **📊 Metadata Support**: Automatic attribution and source information
-- **🗂️ Region Integration**: Seamless integration with GRASS computational region
-
 ## Supported Server Types
 
 ### XYZ Tile Servers (13)
