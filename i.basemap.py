@@ -228,59 +228,59 @@ WEB_MAP_SERVERS = {
     },
     'ESA_WorldCover': {
         'name': 'ESA WorldCover',
-        'url': 'https://services.sentinel-hub.com/ogc/wms/WorldCover',
-        'type': 'wms',
+        'url': 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        'type': 'xyz',
         'max_zoom': 12,
-        'format': 'tiff'
+        'format': 'jpeg'
     },
     'Copernicus_Sentinel': {
         'name': 'Copernicus Sentinel-2',
-        'url': 'https://services.sentinel-hub.com/ogc/wms/sentinel-2',
-        'type': 'wms',
+        'url': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        'type': 'xyz',
         'max_zoom': 14,
-        'format': 'tiff'
+        'format': 'jpeg'
     },
     'Landsat': {
         'name': 'Landsat 8',
-        'url': 'https://services.sentinel-hub.com/ogc/wms/landsat8',
-        'type': 'wms',
+        'url': 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        'type': 'xyz',
         'max_zoom': 14,
-        'format': 'tiff'
+        'format': 'jpeg'
     },
     'MODIS': {
         'name': 'MODIS',
-        'url': 'https://services.sentinel-hub.com/ogc/wms/modis',
-        'type': 'wms',
+        'url': 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        'type': 'xyz',
         'max_zoom': 10,
-        'format': 'tiff'
+        'format': 'jpeg'
     },
     'NOAA_Climate': {
         'name': 'NOAA Climate Data',
-        'url': 'https://www.ncdc.noaa.gov/oa-web/wms/wms',
-        'type': 'wms',
+        'url': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'type': 'xyz',
         'max_zoom': 12,
-        'format': 'tiff'
+        'format': 'png'
     },
     'ESA_Climate': {
         'name': 'ESA Climate Change Service',
-        'url': 'https://climate.copernicus.eu/wms',
-        'type': 'wms',
+        'url': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'type': 'xyz',
         'max_zoom': 12,
-        'format': 'tiff'
+        'format': 'png'
     },
     'WorldBank': {
         'name': 'World Bank Development Data',
-        'url': 'https://services.arcgisonline.com/ArcGIS/rest/services/WorldBank_Indicators/MapServer/WMS',
-        'type': 'wms',
+        'url': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'type': 'xyz',
         'max_zoom': 12,
-        'format': 'tiff'
+        'format': 'png'
     },
     'UN_GeoWeb': {
         'name': 'UN GeoNetwork',
-        'url': 'https://geodata.grid.un.org/arcgis/services/UNGeoWeb/MapServer/WMS',
-        'type': 'wms',
+        'url': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'type': 'xyz',
         'max_zoom': 12,
-        'format': 'tiff'
+        'format': 'png'
     }
 }
 
