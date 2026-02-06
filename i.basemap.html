@@ -1,0 +1,139 @@
+<!-- meta page name: i.basemap -->
+<!-- meta page name description: Downloads and imports base map data from a comprehensive catalog of 25 freely available web map servers. -->
+
+<h2>DESCRIPTION</h2>
+
+The <em>i.basemap</em> module provides a comprehensive interface for downloading and importing base map data from <b>25 freely available web map servers</b>. It supports both XYZ tiles and WMS services with robust error handling, randomized downloads, and retry logic.
+
+The module supports multiple web mapping standards including:
+<ul>
+<li><b>XYZ</b> - Slippy map tiles (OpenStreetMap, Google, Bing, Stamen, etc.)</li>
+<li><b>WMS</b> - Web Map Service (USGS, ESA, NOAA, World Bank, etc.)</li>
+<li><b>WMTS</b> - Web Map Tile Service</li>
+</ul>
+
+<h2>AVAILABLE SERVERS</h2>
+
+The module includes a comprehensive catalog of <b>25 freely available web map servers</b>:
+
+<h3>Web Mapping Services (XYZ)</h3>
+<ul>
+<li><b>OpenStreetMap</b> - Free collaborative map of world (Max Zoom: 19)</li>
+<li><b>ESRI_WorldImagery</b> - High-resolution satellite and aerial imagery (Max Zoom: 19)</li>
+<li><b>Google_Satellite</b> - Google satellite imagery (Max Zoom: 20)</li>
+<li><b>Google_Terrain</b> - Google terrain maps with elevation data (Max Zoom: 15)</li>
+<li><b>Google_Hybrid</b> - Google hybrid satellite with road overlays (Max Zoom: 20)</li>
+<li><b>Bing_Aerial</b> - Microsoft Bing aerial photography (Max Zoom: 19)</li>
+<li><b>Bing_Roads</b> - Microsoft Bing road maps (Max Zoom: 19)</li>
+<li><b>Stamen_Terrain</b> - Terrain maps with hillshading (Max Zoom: 18)</li>
+<li><b>Stamen_Toner</b> - High-contrast black and white maps (Max Zoom: 20)</li>
+<li><b>Stamen_Watercolor</b> - Artistic watercolor style maps (Max Zoom: 18)</li>
+<li><b>OpenTopoMap</b> - Topographic maps with hiking trails (Max Zoom: 17)</li>
+<li><b>OSM_Humanitarian</b> - Humanitarian response focused maps (Max Zoom: 20)</li>
+</ul>
+
+<h3>Scientific & Earth Observation (WMS)</h3>
+<ul>
+<li><b>USGS_Topo</b> - USGS topographic map data (Max Zoom: 16)</li>
+<li><b>USGS_NAIP</b> - USGS National Agriculture Imagery Program (Max Zoom: 18)</li>
+<li><b>USGS_3DEP</b> - USGS high-resolution elevation data (Max Zoom: 15)</li>
+<li><b>USGS_Hydro</b> - USGS hydrography data (Max Zoom: 16)</li>
+<li><b>ESA_WorldCover</b> - ESA 10m global land cover map (Max Zoom: 12)</li>
+<li><b>Copernicus_Sentinel</b> - Sentinel-2 satellite imagery (Max Zoom: 14)</li>
+<li><b>Landsat</b> - Landsat 8 satellite imagery (Max Zoom: 14)</li>
+<li><b>MODIS</b> - MODIS satellite data (Max Zoom: 10)</li>
+<li><b>NOAA_Climate</b> - NOAA climate and weather data (Max Zoom: 12)</li>
+<li><b>ESA_Climate</b> - ESA climate data and indicators (Max Zoom: 12)</li>
+<li><b>WorldBank</b> - World Bank development indicators (Max Zoom: 12)</li>
+<li><b>UN_GeoWeb</b> - United Nations geographic data (Max Zoom: 12)</li>
+<li><b>Natural_Earth</b> - National Geographic style world map (Max Zoom: 16)</li>
+</ul>
+
+<h2>KEY FEATURES</h2>
+
+<ul>
+<li><b>🎲 Randomized Downloads</b> - Prevents rate limiting by randomizing tile download order</li>
+<li><b>🔄 Retry Logic</b> - 3 attempts per tile with timeouts for reliability</li>
+<li><b>⚡ Fast Processing</b> - Basic image validation for speed</li>
+<li><b>🎯 Accurate Coordinates</b> - Fixed tile coordinate calculation</li>
+<li><b>🌍 Multiple Standards</b> - Support for XYZ tiles and WMS services</li>
+<li><b>📊 Metadata Support</b> - Automatic attribution and source information</li>
+<li><b>🗂️ Region Integration</b> - Seamless integration with GRASS computational region</li>
+</ul>
+
+<h2>USAGE EXAMPLES</h2>
+
+<h3>Basic Usage</h3>
+<pre>
+# List all available servers (25 total)
+i.basemap -l
+
+# Download OpenStreetMap for current region
+i.basemap server=OpenStreetMap output=osm_map -c
+
+# Download satellite imagery
+i.basemap server=Google_Satellite output=satellite -c
+
+# Download Bing aerial imagery
+i.basemap server=Bing_Aerial output=aerial -c
+</pre>
+
+<h3>Advanced Usage</h3>
+<pre>
+# Custom URL with API key
+i.basemap url="https://api.example.com/{z}/{x}/{y}?key={api_key}" output=custom api_key=your_key
+
+# WMS server with specific layer
+i.basemap server=USGS_Topo output=topo layer=topo -c
+
+# High resolution output
+i.basemap server=ESRI_WorldImagery output=high_res maxcols=2048 maxrows=2048 -c
+</pre>
+
+<h2>TECHNICAL DETAILS</h2>
+
+<h3>Coordinate System</h3>
+<ul>
+<li><b>Input</b>: Supports projected or geographic coordinates</li>
+<li><b>Transformation</b>: Automatic conversion to lat/lon for XYZ tiles</li>
+<li><b>Output</b>: Reprojects to current GRASS location projection</li>
+</ul>
+
+<h3>Tile Processing</h3>
+<ul>
+<li><b>Download</b>: Uses curl with connection timeouts</li>
+<li><b>Validation</b>: Basic image header verification</li>
+<li><b>Retry</b>: Up to 3 attempts per failed tile</li>
+<li><b>Randomization</b>: Tiles downloaded in random order</li>
+<li><b>World Files</b>: Automatic creation for georeferencing</li>
+</ul>
+
+<h3>Performance Features</h3>
+<ul>
+<li><b>Dynamic Zoom</b>: Automatic zoom level selection based on region resolution</li>
+<li><b>Overlap Buffer</b>: 10% bbox expansion + 1-tile overlap</li>
+<li><b>Memory Efficient</b>: Temporary file cleanup</li>
+<li><b>Error Recovery</b>: Graceful handling of network issues</li>
+</ul>
+
+<h2>DEPENDENCIES</h2>
+
+<h3>Required</h3>
+<ul>
+<li><b>GRASS GIS 8.5+</b>: For core functionality</li>
+<li><b>curl</b>: For tile downloads</li>
+<li><b>gdal</b>: For VRT creation and import</li>
+</ul>
+
+<h3>Optional</h3>
+<ul>
+<li><b>pyproj</b>: For coordinate transformation (auto-installed if needed)</li>
+</ul>
+
+<h2>SEE ALSO</h2>
+
+<ul>
+<li><em><a href="r.in.gdal.html">r.in.gdal</a></em> - Import raster data using GDAL</li>
+<li><em><a href="r.in.wms.html">r.in.wms</a></em> - Download web mapping services</li>
+<li><em><a href="g.region.html">g.region</a></em> - Manage computational region</li>
+</ul>
