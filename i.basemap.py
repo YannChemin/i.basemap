@@ -90,6 +90,11 @@
 #% description: Overwrite existing maps
 #%end
 
+#%flag
+#% key: b
+#% description: Keep separate red/green/blue band maps instead of a single composite
+#%end
+
 import sys
 import os
 import math
@@ -719,16 +724,28 @@ def main():
         download_wms_tiles(tile_url, bbox, output, maxcols, maxrows, srs, format)
     else:
         download_xyz_tiles(tile_url, bbox, output, maxcols, maxrows, srs, format)
-    
+
+    # If the import produced separate red/green/blue band maps, by default
+    # merge them into a single composite map named after the output basename
+    # and remove the intermediate bands. Use -b to keep the three bands instead.
+    band_maps = [f"{output}.{band}" for band in ('red', 'green', 'blue')]
+    have_bands = all(gs.find_file(name=name, element='raster')['file'] for name in band_maps)
+
+    if have_bands and not flags['b']:
+        gs.message("Creating RGB composite and removing band maps...")
+        gs.run_command('r.composite', red=band_maps[0], green=band_maps[1],
+                        blue=band_maps[2], output=output, overwrite=True)
+        gs.run_command('g.remove', type='raster', name=band_maps, flags='f')
+
     # Add metadata to the map
     if gs.find_file(name=output, element='raster')['file']:
-        gs.run_command('r.support', map=output, 
+        gs.run_command('r.support', map=output,
                       title=f"Base map from {server_name}",
                       source1=tile_url,
                       description=f"Base map imported from {server_name}")
-    
+
     gs.message(f"Successfully imported base map as '{output}'")
-    
+
     return 0
 
 if __name__ == "__main__":
