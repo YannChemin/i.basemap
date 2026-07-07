@@ -70,6 +70,15 @@
 #% description: Output format for downloaded tiles
 #%end
 
+#%option
+#% key: composite_levels
+#% type: integer
+#% required: no
+#% options: 1-256
+#% answer: 256
+#% description: Number of color levels per RGB channel used by r.composite (256 = lossless for 8-bit imagery)
+#%end
+
 #%flag
 #% key: l
 #% description: List available web map servers
@@ -101,6 +110,7 @@ import math
 import subprocess
 import tempfile
 import random
+from osgeo import gdal
 
 # Try to import grass.script
 try:
@@ -610,6 +620,14 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
 
             subprocess.run(cmd, check=True, capture_output=True)
 
+            # Tag band color interpretation explicitly. gdalbuildvrt/gdal_translate
+            # don't reliably propagate Red/Green/Blue from source PNG/JPEG tiles,
+            # which otherwise makes r.import/r.in.gdal fall back to naming bands
+            # <output>.1/.2/.3 instead of <output>.red/.green/.blue.
+            band_colors = ['red', 'green', 'blue', 'alpha']
+            n_bands = gdal.Open(vrt_file).RasterCount
+            colorinterp = band_colors[:n_bands]
+
             # Apply cubic resampling to reduce seams
             final_vrt = os.path.join(temp_dir, "tiles_final.vrt")
             translate_cmd = [
@@ -617,15 +635,21 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
                 '-of', 'VRT',
                 '-r', 'cubic',
                 '-a_nodata', '0',
+                '-colorinterp', ','.join(colorinterp),
                 vrt_file, final_vrt
             ]
             subprocess.run(translate_cmd, check=True, capture_output=True)
 
         except subprocess.CalledProcessError as e:
             gs.warning(f"Advanced VRT creation failed: {e}")
-            # Fallback: try simple gdalbuildvrt, then stamp the SRS on afterwards
+            # Fallback: try simple gdalbuildvrt, then stamp the SRS and band
+            # colors on afterwards
             try:
                 subprocess.run(['gdalbuildvrt', '-a_srs', 'EPSG:3857', vrt_file] + tile_files, check=True)
+                band_colors = ['red', 'green', 'blue', 'alpha']
+                n_bands = gdal.Open(vrt_file).RasterCount
+                for i, color in enumerate(band_colors[:n_bands], start=1):
+                    subprocess.run(['gdal_edit.py', '-colorinterp_' + str(i), color, vrt_file], check=True)
                 final_vrt = vrt_file
             except subprocess.CalledProcessError:
                 gs.fatal("Failed to create VRT from tiles. gdalbuildvrt may not be available.")
@@ -728,13 +752,21 @@ def main():
     # If the import produced separate red/green/blue band maps, by default
     # merge them into a single composite map named after the output basename
     # and remove the intermediate bands. Use -b to keep the three bands instead.
-    band_maps = [f"{output}.{band}" for band in ('red', 'green', 'blue')]
-    have_bands = all(gs.find_file(name=name, element='raster')['file'] for name in band_maps)
+    # r.import/r.in.gdal name bands after GDAL's color interpretation when
+    # available (<output>.red/.green/.blue), falling back to band index
+    # (<output>.1/.2/.3) otherwise, so check for both.
+    band_maps = None
+    for suffixes in (('red', 'green', 'blue'), ('1', '2', '3')):
+        candidate = [f"{output}.{suffix}" for suffix in suffixes]
+        if all(gs.find_file(name=name, element='raster')['file'] for name in candidate):
+            band_maps = candidate
+            break
 
-    if have_bands and not flags['b']:
+    if band_maps and not flags['b']:
         gs.message("Creating RGB composite and removing band maps...")
         gs.run_command('r.composite', red=band_maps[0], green=band_maps[1],
-                        blue=band_maps[2], output=output, overwrite=True)
+                        blue=band_maps[2], levels=options['composite_levels'],
+                        output=output, overwrite=True)
         gs.run_command('g.remove', type='raster', name=band_maps, flags='f')
 
     # Add metadata to the map
