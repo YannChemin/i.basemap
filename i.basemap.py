@@ -439,39 +439,45 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
         ytile = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n)
         return (xtile, ytile)
     
+    def num2deg(xtile, ytile, zoom):
+        n = 2.0 ** zoom
+        lon_deg = xtile / n * 360.0 - 180.0
+        lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
+        lat_deg = math.degrees(lat_rad)
+        return (lon_deg, lat_deg)
+
+    def num2merc(xtile, ytile, zoom):
+        """Convert tile coordinates to Web Mercator (EPSG:3857) meters"""
+        lon_deg, lat_deg = num2deg(xtile, ytile, zoom)
+        merc_x = lon_deg * 20037508.34 / 180.0
+        merc_y = math.log(math.tan((90.0 + lat_deg) * math.pi / 360.0)) / (math.pi / 180.0)
+        merc_y = merc_y * 20037508.34 / 180.0
+        return (merc_x, merc_y)
+
     def create_world_file(world_file, x, y, zoom):
-        """Create a world file (.wld) for an XYZ tile in UTM coordinates"""
-        import pyproj
-        
-        # First convert tile coordinates to lat/lon, then to UTM
-        def num2deg(xtile, ytile, zoom):
-            n = 2.0 ** zoom
-            lon_deg = xtile / n * 360.0 - 180.0
-            lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
-            lat_deg = math.degrees(lat_rad)
-            return (lon_deg, lat_deg)
-        
-        # Get lat/lon coordinates of tile corners
-        min_lon, max_lat = num2deg(x, y, zoom)
-        max_lon, min_lat = num2deg(x + 1, y + 1, zoom)
-        
-        # Transform lat/lon to UTM zone 44N
-        transformer = pyproj.Transformer.from_crs('EPSG:4326', 'EPSG:32644', always_xy=True)
-        min_utm_x, max_utm_y = transformer.transform(min_lon, max_lat)
-        max_utm_x, min_utm_y = transformer.transform(max_lon, min_lat)
-        
+        """Create a world file (.wld) for an XYZ tile in Web Mercator coordinates
+
+        XYZ tiles are natively served in Web Mercator (EPSG:3857), so the
+        world file must be georeferenced in that CRS to match the tile
+        pixel grid. Reprojection to the current GRASS location happens
+        later, on import.
+        """
+        # Get Web Mercator coordinates of tile corners
+        min_merc_x, max_merc_y = num2merc(x, y, zoom)
+        max_merc_x, min_merc_y = num2merc(x + 1, y + 1, zoom)
+
         # World file format (6 lines):
         # Assuming 256x256 pixel tiles
-        pixel_size_x = (max_utm_x - min_utm_x) / 256
-        pixel_size_y = (max_utm_y - min_utm_y) / 256
-        
+        pixel_size_x = (max_merc_x - min_merc_x) / 256
+        pixel_size_y = (max_merc_y - min_merc_y) / 256
+
         with open(world_file, 'w') as f:
             f.write(f"{pixel_size_x}\n")  # Line 1: pixel width
             f.write("0\n")              # Line 2: rotation y
-            f.write("0\n")              # Line 3: rotation x  
+            f.write("0\n")              # Line 3: rotation x
             f.write(f"{-pixel_size_y}\n") # Line 4: pixel height (negative)
-            f.write(f"{min_utm_x}\n")   # Line 5: x-coordinate of upper-left pixel center
-            f.write(f"{max_utm_y}\n")   # Line 6: y-coordinate of upper-left pixel center
+            f.write(f"{min_merc_x}\n")   # Line 5: x-coordinate of upper-left pixel center
+            f.write(f"{max_merc_y}\n")   # Line 6: y-coordinate of upper-left pixel center
     
     # Get tile coordinates for bbox with overlap
     min_x, min_y = deg2num(bbox['maxy'], bbox['minx'], zoom_level)
@@ -576,20 +582,29 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
         
         gs.message(f"Downloaded {len(tile_files)} tiles")
         
+        # Real-world Web Mercator extent of the tile grid (not tile indices)
+        merc_min_x, merc_max_y = num2merc(min_x, min_y, zoom_level)
+        merc_max_x, merc_min_y = num2merc(max_x + 1, max_y + 1, zoom_level)
+
+        # Web Mercator tiles are equal-sized in projected meters at a given zoom
+        earth_circumference = 2 * math.pi * 6378137.0
+        pixel_size = (earth_circumference / (2 ** zoom_level)) / 256
+
         # Create a VRT file from the tiles using gdalbuildvrt
         vrt_file = os.path.join(temp_dir, "tiles.vrt")
         try:
             # Create VRT with blending to reduce tile seams
             cmd = [
                 'gdalbuildvrt',
+                '-a_srs', 'EPSG:3857',
                 '-resolution', 'user',
-                '-te', str(min_x), str(min_y), str(max_x + 1), str(max_y + 1),
-                '-tr', str(256), str(256),
+                '-te', str(merc_min_x), str(merc_min_y), str(merc_max_x), str(merc_max_y),
+                '-tr', str(pixel_size), str(pixel_size),
                 vrt_file
             ] + tile_files
-            
+
             subprocess.run(cmd, check=True, capture_output=True)
-            
+
             # Apply cubic resampling to reduce seams
             final_vrt = os.path.join(temp_dir, "tiles_final.vrt")
             translate_cmd = [
@@ -600,21 +615,22 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
                 vrt_file, final_vrt
             ]
             subprocess.run(translate_cmd, check=True, capture_output=True)
-            
+
         except subprocess.CalledProcessError as e:
             gs.warning(f"Advanced VRT creation failed: {e}")
-            # Fallback: try simple gdalbuildvrt
+            # Fallback: try simple gdalbuildvrt, then stamp the SRS on afterwards
             try:
-                subprocess.run(['gdalbuildvrt', vrt_file] + tile_files, check=True)
+                subprocess.run(['gdalbuildvrt', '-a_srs', 'EPSG:3857', vrt_file] + tile_files, check=True)
                 final_vrt = vrt_file
             except subprocess.CalledProcessError:
                 gs.fatal("Failed to create VRT from tiles. gdalbuildvrt may not be available.")
-        
-        # Import VRT into GRASS using r.in.gdal
+
+        # Import VRT into GRASS using r.import, which reprojects the
+        # Web Mercator tiles into the current location's CRS
         try:
-            gs.run_command('r.in.gdal', input=final_vrt, output=output, overwrite=True, flags='o')
+            gs.run_command('r.import', input=final_vrt, output=output, overwrite=True)
         except:
-            gs.fatal("Failed to import VRT into GRASS. r.in.gdal may not be available.")
+            gs.fatal("Failed to import VRT into GRASS. r.import may not be available.")
         
         gs.message(f"Successfully created raster map '{output}' from {len(tile_files)} tiles")
         
