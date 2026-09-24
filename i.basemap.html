@@ -86,9 +86,16 @@ i.basemap server=NOAA_Climate output=climate -c
 
 <h3>Coordinate System</h3>
 <ul>
-<li><b>Input</b>: Supports projected or geographic coordinates</li>
-<li><b>Transformation</b>: Automatic conversion to lat/lon for XYZ tiles</li>
-<li><b>Output</b>: Reprojects to current GRASS location projection</li>
+<li><b>Input</b>: Supports any projected or geographic CRS of the current project</li>
+<li><b>Transformation</b>: The WGS84 extent of the region is taken from
+<em>g.region -b</em>, so any CRS (UTM, Lambert-93, national grids, ...) selects
+the right XYZ tiles; in lat/lon projects the resolution is converted to
+metres to choose the zoom level</li>
+<li><b>Output</b>: Reprojects to current GRASS project CRS</li>
+<li><b>Tiles</b>: Paletted, grey and RGBA tiles are expanded to RGB before
+mosaicking; areas without tiles become NULL (black pixels are kept)</li>
+<li><b>Tile policy</b>: Requests carry a descriptive User-Agent and HTTP errors
+(e.g. 403 policy pages) are treated as failed tiles</li>
 </ul>
 
 <h3>Tile Processing</h3>

@@ -53,9 +53,16 @@ i.basemap server=Landsat output=landsat -c
 ## Technical Details
 
 ### Coordinate System
-- **Input**: Supports projected or geographic coordinates
-- **Transformation**: Automatic conversion to lat/lon for XYZ tiles
-- **Output**: Reprojects to current GRASS location projection
+- **Input**: Supports any projected or geographic CRS of the current project
+- **Transformation**: The WGS84 extent of the region is taken from
+  `g.region -b`, so any CRS (UTM, Lambert-93, national grids, ...) selects
+  the right XYZ tiles; in lat/lon projects the resolution is converted to
+  metres to choose the zoom level
+- **Output**: Reprojects to current GRASS project CRS
+- **Tiles**: Paletted, grey and RGBA tiles are expanded to RGB before
+  mosaicking; areas without tiles become NULL (black pixels are kept)
+- **Tile policy**: Requests carry a descriptive User-Agent and HTTP errors
+  (e.g. 403 policy pages) are treated as failed tiles
 
 ### Tile Processing
 - **Download**: Uses curl with connection timeouts

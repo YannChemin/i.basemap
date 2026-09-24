@@ -112,6 +112,8 @@ import tempfile
 import random
 from osgeo import gdal
 
+USER_AGENT = "i.basemap/1.1 (GRASS GIS addon; https://grass.osgeo.org)"
+
 # Try to import grass.script
 try:
     import grass.script as gs
@@ -356,62 +358,42 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
     gs.message("Downloading XYZ tiles - this may take a while...")
     gs.message(f"Input bbox: {bbox}")
     
-    # Calculate appropriate zoom level based on region resolution
-    zoom_level = 12  # Default zoom level
-    
-    # Transform projected coordinates to lat/lon if needed
-    def transform_to_latlon(bbox):
-        """Transform projected coordinates to lat/lon using pyproj"""
-        try:
-            import pyproj
-            
-            # Get current GRASS projection info
-            region = gs.region()
-            proj_info = gs.parse_command('g.proj', flags='j')
-            
-            # Create transformer from current projection to WGS84 (EPSG:4326)
-            if '+proj' in proj_info:
-                # Extract projection parameters
-                proj_string = proj_info['+proj']
-                if proj_string == 'utm':
-                    zone = int(proj_info.get('+zone', 44))
-                    src_crs = f"EPSG:326{zone:02d}"
-                else:
-                    # Fallback to Web Mercator for other projections
-                    src_crs = "EPSG:3857"
-            else:
-                src_crs = "EPSG:3857"
-            
-            # Create coordinate transformer
-            transformer = pyproj.Transformer.from_crs(src_crs, "EPSG:4326", always_xy=True)
-            
-            # Transform bbox corners
-            min_lon, min_lat = transformer.transform(bbox['minx'], bbox['miny'])
-            max_lon, max_lat = transformer.transform(bbox['maxx'], bbox['maxy'])
-            
-            return {
-                'minx': min_lon,
-                'miny': min_lat, 
-                'maxx': max_lon,
-                'maxy': max_lat
-            }
-        except ImportError:
-            gs.fatal("pyproj is required for coordinate transformation. "
-                     "Please install it with: pip install pyproj")
-        except Exception as e:
-            gs.warning(f"Coordinate transformation failed: {str(e)}")
-            return bbox
-    
-    # Convert bbox to lat/lon if needed
-    if abs(bbox['minx']) > 180 or abs(bbox['maxx']) > 180:
-        gs.message("Transforming coordinates from projected to lat/lon...")
-        bbox = transform_to_latlon(bbox)
-        gs.message(f"Transformed bbox: {bbox}")
-    
-    # Dynamic zoom level calculation based on region resolution
+    # XYZ tiles are indexed in WGS84 lat/lon. Take the region extent in WGS84
+    # from g.region -b, which uses the project's full CRS definition (any
+    # projection, not only UTM), instead of guessing the source CRS.
     region = gs.region()
+    if gs.locn_is_latlong():
+        bbox = {
+            'minx': region['w'],
+            'miny': region['s'],
+            'maxx': region['e'],
+            'maxy': region['n']
+        }
+    else:
+        ll = gs.parse_command('g.region', flags='bg')
+        try:
+            bbox = {
+                'minx': float(ll['ll_w']),
+                'miny': float(ll['ll_s']),
+                'maxx': float(ll['ll_e']),
+                'maxy': float(ll['ll_n'])
+            }
+        except (KeyError, ValueError):
+            gs.fatal("Unable to compute the WGS84 extent of the current region "
+                     "(g.region -b). Check the project's CRS with g.proj -p.")
+    gs.message(f"Region extent in WGS84: {bbox}")
+
+    # Dynamic zoom level from the region resolution in metres. In a lat/lon
+    # project the resolution is in degrees, so convert it at the region's
+    # centre latitude.
     avg_resolution = (region['nsres'] + region['ewres']) / 2
-    
+    if gs.locn_is_latlong():
+        center_lat = math.radians((bbox['miny'] + bbox['maxy']) / 2)
+        avg_resolution = (
+            region['nsres'] * 111320.0
+            + region['ewres'] * 111320.0 * math.cos(center_lat)
+        ) / 2
+
     # Adjust thresholds to ensure 30m resolution uses zoom 13
     if avg_resolution <= 5:
         zoom_level = 16  # Very high resolution
@@ -425,9 +407,9 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
         zoom_level = 12  # Low-medium resolution
     else:
         zoom_level = 11  # Low resolution
-    
+
     gs.message(f"Region resolution: {avg_resolution:.1f}m, using zoom level {zoom_level} for cleaner imagery")
-    
+
     # Expand bbox by 10% in all directions to ensure complete coverage
     def expand_bbox(bbox, expansion_factor=0.1):
         """Expand bounding box by given factor in all directions"""
@@ -539,7 +521,12 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
                 success = False
                 try:
                     gs.message(f"Downloading tile URL: {tile_url} (attempt {attempt + 1})")
-                    result = subprocess.run(['curl', '-s', '-o', tile_file, tile_url, '--connect-timeout', '10', '--max-time', '30'], 
+                    # -f: treat HTTP errors (e.g. 403 policy pages) as failures.
+                    # A descriptive User-Agent is required by the OpenStreetMap
+                    # tile usage policy.
+                    result = subprocess.run(['curl', '-s', '-f', '-A', USER_AGENT,
+                                             '-o', tile_file, tile_url,
+                                             '--connect-timeout', '10', '--max-time', '30'], 
                                           capture_output=True, text=True)
                     
                     # Validate downloaded tile
@@ -575,7 +562,7 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
                     else:
                         gs.warning(f"Failed to download tile {x},{y}. Return code: {result.returncode} (attempt {attempt + 1})")
                         if result.stderr:
-                            gs.warning(f"Curl error: {result.stderr.decode()}")
+                            gs.warning(f"Curl error: {result.stderr}")
                         if os.path.exists(tile_file):
                             os.remove(tile_file)
                     
@@ -605,18 +592,46 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
         earth_circumference = 2 * math.pi * 6378137.0
         pixel_size = (earth_circumference / (2 ** zoom_level)) / 256
 
-        # Create a VRT file from the tiles using gdalbuildvrt
+        # Normalise every tile to a 3-band RGB GeoTIFF. Paletted PNG tiles
+        # (e.g. OpenStreetMap) each carry their own palette, so mosaicking the
+        # raw palette indices mixes colours; grey tiles must be widened too.
+        rgb_tiles = []
+        for tile_file in tile_files:
+            src = gdal.Open(tile_file)
+            if src is None:
+                gs.warning(f"Cannot read tile {tile_file} - skipping")
+                continue
+            first = src.GetRasterBand(1)
+            if src.RasterCount == 1 and first.GetColorTable() is not None:
+                opts = gdal.TranslateOptions(format='GTiff', rgbExpand='rgb',
+                                             outputSRS='EPSG:3857')
+            elif src.RasterCount >= 3:
+                opts = gdal.TranslateOptions(format='GTiff', bandList=[1, 2, 3],
+                                             outputSRS='EPSG:3857')
+            else:
+                opts = gdal.TranslateOptions(format='GTiff', bandList=[1, 1, 1],
+                                             outputSRS='EPSG:3857')
+            rgb_file = os.path.splitext(tile_file)[0] + "_rgb.tif"
+            gdal.Translate(rgb_file, src, options=opts)
+            src = None
+            rgb_tiles.append(rgb_file)
+        if not rgb_tiles:
+            gs.fatal("No readable tiles were downloaded")
+
+        # Create a VRT file from the tiles using gdalbuildvrt. Areas without
+        # a tile are flagged by an alpha band (-addalpha) rather than by a
+        # nodata value, so genuinely black pixels are kept.
         vrt_file = os.path.join(temp_dir, "tiles.vrt")
         try:
-            # Create VRT with blending to reduce tile seams
             cmd = [
                 'gdalbuildvrt',
                 '-a_srs', 'EPSG:3857',
+                '-addalpha',
                 '-resolution', 'user',
                 '-te', str(merc_min_x), str(merc_min_y), str(merc_max_x), str(merc_max_y),
                 '-tr', str(pixel_size), str(pixel_size),
                 vrt_file
-            ] + tile_files
+            ] + rgb_tiles
 
             subprocess.run(cmd, check=True, capture_output=True)
 
@@ -634,7 +649,6 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
                 'gdal_translate',
                 '-of', 'VRT',
                 '-r', 'cubic',
-                '-a_nodata', '0',
                 '-colorinterp', ','.join(colorinterp),
                 vrt_file, final_vrt
             ]
@@ -645,7 +659,8 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
             # Fallback: try simple gdalbuildvrt, then stamp the SRS and band
             # colors on afterwards
             try:
-                subprocess.run(['gdalbuildvrt', '-a_srs', 'EPSG:3857', vrt_file] + tile_files, check=True)
+                subprocess.run(['gdalbuildvrt', '-a_srs', 'EPSG:3857',
+                                '-addalpha', vrt_file] + rgb_tiles, check=True)
                 band_colors = ['red', 'green', 'blue', 'alpha']
                 n_bands = gdal.Open(vrt_file).RasterCount
                 for i, color in enumerate(band_colors[:n_bands], start=1):
@@ -660,7 +675,21 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
             gs.run_command('r.import', input=final_vrt, output=output, overwrite=True)
         except:
             gs.fatal("Failed to import VRT into GRASS. r.import may not be available.")
-        
+
+        # Turn the alpha band into NULLs on the colour bands, then drop it.
+        # r.import names bands after their colour interpretation or index.
+        for suffixes in (('red', 'green', 'blue', 'alpha'), ('1', '2', '3', '4')):
+            bands = [f"{output}.{suffix}" for suffix in suffixes]
+            if all(gs.find_file(name=b, element='raster')['file'] for b in bands):
+                alpha = bands[3]
+                for band in bands[:3]:
+                    gs.mapcalc(f"{band} = if({alpha} == 0, null(), {band})",
+                               overwrite=True, quiet=True)
+                    gs.run_command('r.colors', map=band, color='grey', quiet=True)
+                gs.run_command('g.remove', type='raster', name=alpha, flags='f',
+                               quiet=True)
+                break
+
         gs.message(f"Successfully created raster map '{output}' from {len(tile_files)} tiles")
         
     finally:
