@@ -25,7 +25,7 @@
 #% key: server
 #% type: string
 #% required: no
-#% options: Google_Satellite,OpenStreetMap,Bing_Aerial,ESRI_WorldImagery,USGS_Topo,Google_Terrain,Google_Hybrid,Bing_Roads,Stamen_Terrain,Stamen_Toner,Stamen_Watercolor,OpenTopoMap,OSM_Humanitarian,Natural_Earth,USGS_NAIP,USGS_3DEP,USGS_Hydro,ESA_WorldCover,Copernicus_Sentinel,Landsat,MODIS,NOAA_Climate,ESA_Climate,WorldBank,UN_GeoWeb
+#% options: Google_Satellite,OpenStreetMap,Bing_Aerial,ESRI_WorldImagery,USGS_Topo,Google_Terrain,Google_Hybrid,Bing_Roads,Stamen_Terrain,Stamen_Toner,Stamen_Watercolor,OpenTopoMap,OSM_Humanitarian,Natural_Earth,USGS_NAIP,USGS_3DEP,USGS_Hydro,Copernicus_Sentinel,Landsat,MODIS
 #% answer: OpenStreetMap
 #% description: Web map server to use
 #%end
@@ -79,6 +79,21 @@
 #% description: Number of color levels per RGB channel used by r.composite (256 = lossless for 8-bit imagery)
 #%end
 
+#%option
+#% key: zoom
+#% type: string
+#% required: no
+#% answer: auto
+#% description: Tile zoom level (0-20), or auto to match the region resolution
+#%end
+
+#%option
+#% key: api_key
+#% type: string
+#% required: no
+#% description: API key for servers that require one (e.g. Stamen styles hosted by Stadia Maps)
+#%end
+
 #%flag
 #% key: l
 #% description: List available web map servers
@@ -122,7 +137,7 @@ except ImportError:
     GRASS_AVAILABLE = False
     gs = None
 
-# Web map server configurations - 25 Comprehensive Data Sources
+# Web map server configurations
 WEB_MAP_SERVERS = {
     'Google_Satellite': {
         'name': 'Google Satellite',
@@ -181,24 +196,24 @@ WEB_MAP_SERVERS = {
         'format': 'png'
     },
     'Stamen_Terrain': {
-        'name': 'Stamen Terrain',
-        'url': 'https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png',
+        'name': 'Stamen Terrain (Stadia Maps, API key required)',
+        'url': 'https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png?api_key={api_key}',
         'type': 'xyz',
         'max_zoom': 18,
         'format': 'png'
     },
     'Stamen_Toner': {
-        'name': 'Stamen Toner',
-        'url': 'https://stamen-tiles-{s}.a.ssl.fastly.net/toner/{z}/{x}/{y}.png',
+        'name': 'Stamen Toner (Stadia Maps, API key required)',
+        'url': 'https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}.png?api_key={api_key}',
         'type': 'xyz',
         'max_zoom': 20,
         'format': 'png'
     },
     'Stamen_Watercolor': {
-        'name': 'Stamen Watercolor',
-        'url': 'https://stamen-tiles-{s}.a.ssl.fastly.net/watercolor/{z}/{x}/{y}.jpg',
+        'name': 'Stamen Watercolor (Stadia Maps, API key required)',
+        'url': 'https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg?api_key={api_key}',
         'type': 'xyz',
-        'max_zoom': 18,
+        'max_zoom': 16,
         'format': 'jpeg'
     },
     'OpenTopoMap': {
@@ -223,18 +238,18 @@ WEB_MAP_SERVERS = {
         'format': 'png'
     },
     'USGS_NAIP': {
-        'name': 'USGS NAIP Imagery',
-        'url': 'https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/MapServer/tile/{z}/{y}/{x}',
+        'name': 'USGS Imagery Only (NAIP orthoimagery, United States)',
+        'url': 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
         'type': 'xyz',
-        'max_zoom': 18,
+        'max_zoom': 16,
         'format': 'jpeg'
     },
     'USGS_3DEP': {
-        'name': 'USGS 3D Elevation Program',
-        'url': 'https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/tile/{z}/{y}/{x}',
+        'name': 'USGS 3DEP shaded relief (rendered, not elevation values)',
+        'url': 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}',
         'type': 'xyz',
-        'max_zoom': 15,
-        'format': 'tiff'
+        'max_zoom': 13,
+        'format': 'jpeg'
     },
     'USGS_Hydro': {
         'name': 'USGS Hydrography',
@@ -243,61 +258,26 @@ WEB_MAP_SERVERS = {
         'max_zoom': 16,
         'format': 'png'
     },
-    'ESA_WorldCover': {
-        'name': 'ESA WorldCover',
-        'url': 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-        'type': 'xyz',
-        'max_zoom': 12,
-        'format': 'jpeg'
-    },
     'Copernicus_Sentinel': {
-        'name': 'Copernicus Sentinel-2',
-        'url': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        'name': 'Sentinel-2 cloudless 2023 (EOX, CC BY-NC-SA 4.0)',
+        'url': 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg',
         'type': 'xyz',
-        'max_zoom': 14,
+        'max_zoom': 15,
         'format': 'jpeg'
     },
     'Landsat': {
-        'name': 'Landsat 8',
-        'url': 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        'name': 'Landsat WELD annual true colour (NASA GIBS)',
+        'url': 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Landsat_WELD_CorrectedReflectance_TrueColor_Global_Annual/default/default/GoogleMapsCompatible_Level12/{z}/{y}/{x}.jpg',
         'type': 'xyz',
-        'max_zoom': 14,
+        'max_zoom': 12,
         'format': 'jpeg'
     },
     'MODIS': {
-        'name': 'MODIS',
-        'url': 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        'name': 'Blue Marble Next Generation, MODIS composite (NASA GIBS)',
+        'url': 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_NextGeneration/default/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg',
         'type': 'xyz',
-        'max_zoom': 10,
+        'max_zoom': 8,
         'format': 'jpeg'
-    },
-    'NOAA_Climate': {
-        'name': 'NOAA Climate Data',
-        'url': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'type': 'xyz',
-        'max_zoom': 12,
-        'format': 'png'
-    },
-    'ESA_Climate': {
-        'name': 'ESA Climate Change Service',
-        'url': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'type': 'xyz',
-        'max_zoom': 12,
-        'format': 'png'
-    },
-    'WorldBank': {
-        'name': 'World Bank Development Data',
-        'url': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'type': 'xyz',
-        'max_zoom': 12,
-        'format': 'png'
-    },
-    'UN_GeoWeb': {
-        'name': 'UN GeoNetwork',
-        'url': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'type': 'xyz',
-        'max_zoom': 12,
-        'format': 'png'
     }
 }
 
@@ -336,6 +316,51 @@ def xyz_to_quadkey(x, y, zoom):
         quadkey += str(digit)
     return quadkey
 
+EARTH_CIRCUMFERENCE = 2 * math.pi * 6378137.0
+# Accept a tile ground pixel up to 5 % coarser than the region resolution,
+# so that a 2 m region at mid latitudes gets zoom 16 (about 2.0 m), not 17.
+ZOOM_TOLERANCE = 1.05
+# Above this many tiles a warning reminds of the servers' usage policies.
+MANY_TILES = 2500
+
+
+def tile_ground_resolution(zoom, lat_deg):
+    """Ground size (m) of one pixel of a 256-pixel Web Mercator tile."""
+    return EARTH_CIRCUMFERENCE * math.cos(math.radians(lat_deg)) / (256 * 2**zoom)
+
+
+def choose_zoom(resolution_m, lat_deg, max_zoom):
+    """Coarsest zoom whose ground pixel is no larger than the resolution.
+
+    :param resolution_m: target ground resolution in metres
+    :param lat_deg: latitude of the region centre
+    :param max_zoom: highest zoom level served
+    :return: tuple (zoom, capped), capped is True when the server's highest
+        zoom is coarser than the resolution asks for
+    """
+    for zoom in range(0, max_zoom + 1):
+        if tile_ground_resolution(zoom, lat_deg) <= resolution_m * ZOOM_TOLERANCE:
+            return zoom, False
+    return max_zoom, True
+
+
+def format_tile_url(template, x, y, zoom, api_key=None):
+    """Fill an XYZ or quadkey URL template for one tile.
+
+    {s} is a load-balancing subdomain (a, b or c), {api_key} the user's key.
+    """
+    fields = {
+        "x": x,
+        "y": y,
+        "z": zoom,
+        "s": "abc"[(x + y) % 3],
+        "api_key": api_key or "",
+    }
+    if "{quadkey}" in template:
+        fields["quadkey"] = xyz_to_quadkey(x, y, zoom)
+    return template.format(**fields)
+
+
 def get_region_bounds():
     """Get current region bounds"""
     region = gs.region()
@@ -347,7 +372,8 @@ def get_region_bounds():
         'maxy': region['n']
     }
 
-def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format):
+def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format,
+                       zoom="auto", max_zoom=20, api_key=None):
     """Download XYZ tiles and create a raster map"""
     import tempfile
     import os
@@ -383,32 +409,35 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
                      "(g.region -b). Check the project's CRS with g.proj -p.")
     gs.message(f"Region extent in WGS84: {bbox}")
 
-    # Dynamic zoom level from the region resolution in metres. In a lat/lon
-    # project the resolution is in degrees, so convert it at the region's
-    # centre latitude.
+    # Zoom level. With zoom=auto, the coarsest level whose ground pixel
+    # matches the region resolution (in metres; in a lat/lon project the
+    # resolution is converted at the region's centre latitude), capped at the
+    # server's highest level.
+    center_lat = (bbox['miny'] + bbox['maxy']) / 2
     avg_resolution = (region['nsres'] + region['ewres']) / 2
     if gs.locn_is_latlong():
-        center_lat = math.radians((bbox['miny'] + bbox['maxy']) / 2)
         avg_resolution = (
             region['nsres'] * 111320.0
-            + region['ewres'] * 111320.0 * math.cos(center_lat)
+            + region['ewres'] * 111320.0 * math.cos(math.radians(center_lat))
         ) / 2
-
-    # Adjust thresholds to ensure 30m resolution uses zoom 13
-    if avg_resolution <= 5:
-        zoom_level = 16  # Very high resolution
-    elif avg_resolution <= 10:
-        zoom_level = 15  # High resolution
-    elif avg_resolution <= 20:
-        zoom_level = 14  # Medium-high resolution
-    elif avg_resolution <= 40:
-        zoom_level = 13  # Medium resolution (30m -> zoom 13)
-    elif avg_resolution <= 80:
-        zoom_level = 12  # Low-medium resolution
+    if zoom == "auto":
+        zoom_level, capped = choose_zoom(avg_resolution, center_lat, max_zoom)
+        if capped:
+            gs.warning(
+                "The server's highest zoom level ({z}, {r:.2f} m) is coarser "
+                "than the region resolution ({res:.2f} m); the output is "
+                "resampled from it.".format(
+                    z=zoom_level, r=tile_ground_resolution(zoom_level, center_lat),
+                    res=avg_resolution))
     else:
-        zoom_level = 11  # Low resolution
-
-    gs.message(f"Region resolution: {avg_resolution:.1f}m, using zoom level {zoom_level} for cleaner imagery")
+        zoom_level = int(zoom)
+        if zoom_level > max_zoom:
+            gs.fatal("Zoom level {z} is above the server's highest level "
+                     "({m}).".format(z=zoom_level, m=max_zoom))
+    gs.message(
+        "Region resolution: {res:.2f} m; zoom level {z} ({r:.2f} m per tile "
+        "pixel).".format(res=avg_resolution, z=zoom_level,
+                         r=tile_ground_resolution(zoom_level, center_lat)))
 
     # Expand bbox by 10% in all directions to ensure complete coverage
     def expand_bbox(bbox, expansion_factor=0.1):
@@ -468,13 +497,16 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
         pixel_size_x = (max_merc_x - min_merc_x) / 256
         pixel_size_y = (max_merc_y - min_merc_y) / 256
 
+        # Lines 5 and 6 hold the centre of the upper-left pixel, not the
+        # tile corner: writing the corner shifts the mosaic by half a pixel
+        # to the west and north.
         with open(world_file, 'w') as f:
             f.write(f"{pixel_size_x}\n")  # Line 1: pixel width
             f.write("0\n")              # Line 2: rotation y
             f.write("0\n")              # Line 3: rotation x
             f.write(f"{-pixel_size_y}\n") # Line 4: pixel height (negative)
-            f.write(f"{min_merc_x}\n")   # Line 5: x-coordinate of upper-left pixel center
-            f.write(f"{max_merc_y}\n")   # Line 6: y-coordinate of upper-left pixel center
+            f.write(f"{min_merc_x + pixel_size_x / 2}\n")  # Line 5: x of upper-left pixel centre
+            f.write(f"{max_merc_y - pixel_size_y / 2}\n")  # Line 6: y of upper-left pixel centre
     
     # Get tile coordinates for bbox with overlap
     min_x, min_y = deg2num(bbox['maxy'], bbox['minx'], zoom_level)
@@ -488,6 +520,12 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
     max_y = min(2**zoom_level - 1, max_y + overlap)
     
     gs.message(f"Limited tile range: X({min_x}-{max_x}), Y({min_y}-{max_y})")
+    n_tiles = (max_x - min_x + 1) * (max_y - min_y + 1)
+    if n_tiles > MANY_TILES:
+        gs.warning(
+            "{n} tiles requested. Tile servers limit bulk downloads (see their "
+            "usage policies); consider a smaller region or a lower zoom "
+            "level.".format(n=n_tiles))
     
     # Create temporary directory for tiles
     temp_dir = tempfile.mkdtemp()
@@ -507,12 +545,7 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
         # Download tiles using curl with retry logic
         max_retries = 2
         for x, y in tile_coords:
-            # Handle different URL formats (XYZ vs quadkey)
-            if '{quadkey}' in url_template:
-                quadkey = xyz_to_quadkey(x, y, zoom_level)
-                tile_url = url_template.format(quadkey=quadkey)
-            else:
-                tile_url = url_template.format(z=zoom_level, x=x, y=y)
+            tile_url = format_tile_url(url_template, x, y, zoom_level, api_key)
             
             tile_file = os.path.join(temp_dir, f"tile_{x}_{y}.{format}")
             
@@ -742,13 +775,18 @@ def main():
     maxrows = int(options['maxrows'])
     srs = options['srs']
     format = options['format']
-    
+    api_key = options['api_key']
+    zoom = options['zoom'].strip().lower() or "auto"
+    if zoom != "auto" and not (zoom.isdigit() and 0 <= int(zoom) <= 20):
+        gs.fatal("zoom must be auto or an integer from 0 to 20, not <{}>.".format(zoom))
+
     # Get URL and server type
     if url:
         # Use custom URL
         tile_url = url
         server_name = "Custom"
         server_type = "xyz"  # Assume XYZ for custom URLs
+        max_zoom = 20
     else:
         # Use predefined server
         if server not in WEB_MAP_SERVERS:
@@ -758,6 +796,10 @@ def main():
         tile_url = server_info['url']
         server_name = server_info['name']
         server_type = server_info['type']
+        max_zoom = server_info['max_zoom']
+    if '{api_key}' in tile_url and not api_key:
+        gs.fatal("Server <{}> requires an API key: set api_key=.".format(
+            server or "custom"))
     
     # Get bounding box
     if flags['c']:
@@ -776,7 +818,8 @@ def main():
     if server_type.lower() == 'wms':
         download_wms_tiles(tile_url, bbox, output, maxcols, maxrows, srs, format)
     else:
-        download_xyz_tiles(tile_url, bbox, output, maxcols, maxrows, srs, format)
+        download_xyz_tiles(tile_url, bbox, output, maxcols, maxrows, srs, format,
+                           zoom=zoom, max_zoom=max_zoom, api_key=api_key)
 
     # If the import produced separate red/green/blue band maps, by default
     # merge them into a single composite map named after the output basename
@@ -798,12 +841,18 @@ def main():
                         output=output, overwrite=True)
         gs.run_command('g.remove', type='raster', name=band_maps, flags='f')
 
-    # Add metadata to the map
-    if gs.find_file(name=output, element='raster')['file']:
-        gs.run_command('r.support', map=output,
-                      title=f"Base map from {server_name}",
-                      source1=tile_url,
-                      description=f"Base map imported from {server_name}")
+    # Add metadata to the maps produced: a single composite, the r.composite
+    # true-colour maps <output>.r/.g/.b, or the separate bands (-b). The
+    # source URL is recorded without the API key.
+    produced = [name for name in
+                [output] + [f"{output}.{suffix}" for suffix in
+                            ("r", "g", "b", "red", "green", "blue", "1", "2", "3")]
+                if gs.find_file(name=name, element='raster')['file']]
+    for name in produced:
+        gs.run_command('r.support', map=name,
+                       title=f"Base map from {server_name}",
+                       source1=tile_url.replace(api_key, "<api_key>") if api_key else tile_url,
+                       description=f"Base map imported from {server_name}")
 
     gs.message(f"Successfully imported base map as '{output}'")
 
