@@ -1,184 +1,175 @@
 <!-- meta page name: i.basemap -->
-<!-- meta page name description: Downloads and imports base map data from a comprehensive catalog of 25 freely available web map servers. -->
+<!-- meta page name description: Imports basemaps from web map servers for the computational region. -->
 
 <h2>DESCRIPTION</h2>
-
-The <em>i.basemap</em> module provides a comprehensive interface for downloading and importing base map data from <b>25 freely available web map servers</b> with robust error handling, randomized downloads, and retry logic. All servers are fully functional (100% success rate).
-
-The module supports multiple web mapping standards including:
-<ul>
-<li><b>XYZ</b> - Slippy map tiles (OpenStreetMap, Google, ESRI, etc.)</li>
-<li><b>Quadkey</b> - Bing Maps quadkey format (Bing Aerial, Bing Roads)</li>
-<li><b>Automatic Detection</b> - Routes to appropriate handler based on server type</li>
-</ul>
-
-<h2>AVAILABLE SERVERS</h2>
-
-The module includes a comprehensive catalog of <b>25 freely available web map servers</b>:
-
-<h3>Web Mapping Services (XYZ)</h3>
-<ul>
-<li><b>OpenStreetMap</b> - Free collaborative map of world (Max Zoom: 19)</li>
-<li><b>ESRI_WorldImagery</b> - High-resolution satellite and aerial imagery (Max Zoom: 19)</li>
-<li><b>Google_Satellite</b> - Google satellite imagery (Max Zoom: 20)</li>
-<li><b>Google_Terrain</b> - Google terrain maps with elevation data (Max Zoom: 15)</li>
-<li><b>Google_Hybrid</b> - Google hybrid satellite with road overlays (Max Zoom: 20)</li>
-<li><b>Stamen_Terrain</b> - Terrain maps with hillshading (Max Zoom: 18)</li>
-<li><b>Stamen_Toner</b> - High-contrast black and white maps (Max Zoom: 20)</li>
-<li><b>Stamen_Watercolor</b> - Artistic watercolor style maps (Max Zoom: 18)</li>
-<li><b>OpenTopoMap</b> - Topographic maps with hiking trails (Max Zoom: 17)</li>
-<li><b>OSM_Humanitarian</b> - Humanitarian response focused maps (Max Zoom: 20)</li>
-<li><b>Natural_Earth</b> - National Geographic style world map (Max Zoom: 16)</li>
-<li><b>USGS_Topo</b> - USGS topographic map data (Max Zoom: 16)</li>
-<li><b>USGS_NAIP</b> - USGS National Agriculture Imagery Program (Max Zoom: 18)</li>
-<li><b>USGS_3DEP</b> - USGS high-resolution elevation data (Max Zoom: 15)</li>
-<li><b>USGS_Hydro</b> - USGS hydrography data (Max Zoom: 16)</li>
-<li><b>ESA_WorldCover</b> - ESA 10m global land cover map (Max Zoom: 12)</li>
-<li><b>Copernicus_Sentinel</b> - Sentinel-2 satellite imagery (Max Zoom: 14)</li>
-<li><b>Landsat</b> - Landsat 8 satellite imagery (Max Zoom: 14)</li>
-<li><b>MODIS</b> - MODIS satellite data (Max Zoom: 10)</li>
-<li><b>NOAA_Climate</b> - NOAA climate and weather data (Max Zoom: 12)</li>
-<li><b>ESA_Climate</b> - ESA climate data and indicators (Max Zoom: 12)</li>
-<li><b>WorldBank</b> - World Bank development indicators (Max Zoom: 12)</li>
-<li><b>UN_GeoWeb</b> - United Nations geographic data (Max Zoom: 12)</li>
-</ul>
-
-<h3>Quadkey Services (Bing)</h3>
-<ul>
-<li><b>Bing_Aerial</b> - Microsoft Bing aerial photography (Max Zoom: 19)</li>
-<li><b>Bing_Roads</b> - Microsoft Bing road maps (Max Zoom: 19)</li>
-</ul>
-
-<h2>USAGE EXAMPLES</h2>
-
-<h3>Basic Usage</h3>
-<pre>
-# List all available servers (25 total)
-i.basemap -l
-
-# Download OpenStreetMap for current region
-i.basemap server=OpenStreetMap output=osm_map -c
-
-# Download satellite imagery
-i.basemap server=Google_Satellite output=satellite -c
-
-# Download Bing aerial imagery
-i.basemap server=Bing_Aerial output=aerial -c
-</pre>
-
-<h3>Advanced Usage</h3>
-<pre>
-# Custom URL with API key
-i.basemap url="https://api.example.com/{z}/{x}/{y}?key={api_key}" output=custom api_key=your_key
-
-# High resolution output
-i.basemap server=ESRI_WorldImagery output=high_res maxcols=2048 maxrows=2048 -c
-
-# Scientific data
-i.basemap server=Copernicus_Sentinel output=sentinel -c
-i.basemap server=Landsat output=landsat -c
-
-# Climate data
-i.basemap server=NOAA_Climate output=climate -c
-</pre>
-
-<h2>TECHNICAL DETAILS</h2>
-
-<h3>Coordinate System</h3>
-<ul>
-<li><b>Input</b>: Supports any projected or geographic CRS of the current project</li>
-<li><b>Transformation</b>: The WGS84 extent of the region is taken from
-<em>g.region -b</em>, so any CRS (UTM, Lambert-93, national grids, ...) selects
-the right XYZ tiles; in lat/lon projects the resolution is converted to
-metres to choose the zoom level</li>
-<li><b>Output</b>: Reprojects to current GRASS project CRS</li>
-<li><b>Tiles</b>: Paletted, grey and RGBA tiles are expanded to RGB before
-mosaicking; areas without tiles become NULL (black pixels are kept)</li>
-<li><b>Tile policy</b>: Requests carry a descriptive User-Agent and HTTP errors
-(e.g. 403 policy pages) are treated as failed tiles</li>
-</ul>
-
-<h3>Tile Processing</h3>
-<ul>
-<li><b>Download</b>: Uses curl with connection timeouts</li>
-<li><b>Validation</b>: Basic image header verification</li>
-<li><b>Retry</b>: Up to 3 attempts per failed tile</li>
-<li><b>Randomization</b>: Tiles downloaded in random order</li>
-<li><b>World Files</b>: Automatic creation for georeferencing</li>
-</ul>
-
-<h3>Performance Features</h3>
-<ul>
-<li><b>Dynamic Zoom</b>: Automatic zoom level selection based on region resolution</li>
-<li><b>Overlap Buffer</b>: 10% bbox expansion + 1-tile overlap</li>
-<li><b>Memory Efficient</b>: Temporary file cleanup</li>
-<li><b>Error Recovery</b>: Graceful handling of network issues</li>
-</ul>
-
-<h2>SERVER CATEGORIES</h2>
-
-<h3>High-Resolution Satellite (8)</h3>
-<ul>
-<li>Google_Satellite, ESRI_WorldImagery, ESA_WorldCover, Landsat, MODIS, Copernicus_Sentinel, Bing_Aerial, USGS_NAIP</li>
-</ul>
-
-<h3>Topographic & Terrain (6)</h3>
-<ul>
-<li>USGS_Topo, OpenTopoMap, Stamen_Terrain, Google_Terrain, Natural_Earth, USGS_3DEP</li>
-</ul>
-
-<h3>Street & General Maps (7)</h3>
-<ul>
-<li>OpenStreetMap, OSM_Humanitarian, Google_Hybrid, Bing_Roads, NOAA_Climate, ESA_Climate, WorldBank</li>
-</ul>
-
-<h3>Artistic & Specialized (4)</h3>
-<ul>
-<li>Stamen_Toner, Stamen_Watercolor, UN_GeoWeb, USGS_Hydro</li>
-</ul>
-
-<h2>DEPENDENCIES</h2>
-
-<h3>Required</h3>
-<ul>
-<li><b>GRASS GIS 8.5+</b>: For core functionality</li>
-<li><b>curl</b>: For tile downloads</li>
-<li><b>gdal</b>: For VRT creation and import</li>
-</ul>
-
-<h3>Optional</h3>
-<ul>
-<li><b>pyproj</b>: For coordinate transformation (auto-installed if needed)</li>
-</ul>
-
-<h2>TROUBLESHOOTING</h2>
-
-<h3>Common Issues</h3>
-
-<b>No tiles downloaded</b><br>
-Check coordinate transformation and region bounds.
-
-<b>Partial downloads</b><br>
-Network issues - retry logic handles automatically.
-
-<b>Projection errors</b><br>
-Ensure GRASS location is properly set.
-
-<b>Memory issues</b><br>
-Reduce maxcols/maxrows for large regions.
-
-<h3>Performance Tips</h3>
-<ul>
-<li><b>Smaller regions</b>: Faster downloads and processing</li>
-<li><b>Appropriate zoom</b>: Let script auto-select based on resolution</li>
-<li><b>Network stability</b>: Wired connection preferred for large downloads</li>
-</ul>
-
+<p><em>i.basemap</em> downloads base map tiles from public web map servers for the
+current computational region and imports them as raster maps. The tiles
+are mosaicked, reprojected from Web Mercator to the project's coordinate
+reference system and resampled to the computational region.</p>
+<p>The <strong>server</strong> option selects one of 20 predefined servers (list them with
+<strong>-l</strong>); <strong>url</strong> gives a custom XYZ or quadkey template instead.</p>
+<h3>Servers</h3>
+<table>
+<thead>
+<tr>
+<th>Server</th>
+<th>Max zoom</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Google_Satellite</td>
+<td>20</td>
+<td>Google satellite and aerial imagery</td>
+</tr>
+<tr>
+<td>Google_Hybrid</td>
+<td>20</td>
+<td>Google imagery with labels and roads</td>
+</tr>
+<tr>
+<td>Google_Terrain</td>
+<td>15</td>
+<td>Google terrain map</td>
+</tr>
+<tr>
+<td>ESRI_WorldImagery</td>
+<td>19</td>
+<td>ESRI World Imagery</td>
+</tr>
+<tr>
+<td>Bing_Aerial</td>
+<td>19</td>
+<td>Microsoft Bing aerial imagery (quadkey)</td>
+</tr>
+<tr>
+<td>Bing_Roads</td>
+<td>19</td>
+<td>Microsoft Bing road map (quadkey)</td>
+</tr>
+<tr>
+<td>OpenStreetMap</td>
+<td>19</td>
+<td>OpenStreetMap standard style</td>
+</tr>
+<tr>
+<td>OSM_Humanitarian</td>
+<td>20</td>
+<td>OpenStreetMap humanitarian style</td>
+</tr>
+<tr>
+<td>OpenTopoMap</td>
+<td>17</td>
+<td>Topographic map from OpenStreetMap and SRTM</td>
+</tr>
+<tr>
+<td>Natural_Earth</td>
+<td>16</td>
+<td>ESRI National Geographic world map</td>
+</tr>
+<tr>
+<td>Stamen_Terrain</td>
+<td>18</td>
+<td>Stamen terrain, hosted by Stadia Maps (<strong>api_key</strong> required)</td>
+</tr>
+<tr>
+<td>Stamen_Toner</td>
+<td>20</td>
+<td>Stamen toner, hosted by Stadia Maps (<strong>api_key</strong> required)</td>
+</tr>
+<tr>
+<td>Stamen_Watercolor</td>
+<td>16</td>
+<td>Stamen watercolor, hosted by Stadia Maps (<strong>api_key</strong> required)</td>
+</tr>
+<tr>
+<td>USGS_Topo</td>
+<td>16</td>
+<td>USGS topographic map (United States)</td>
+</tr>
+<tr>
+<td>USGS_NAIP</td>
+<td>16</td>
+<td>USGS Imagery Only basemap, NAIP orthoimagery (United States)</td>
+</tr>
+<tr>
+<td>USGS_3DEP</td>
+<td>13</td>
+<td>USGS 3DEP shaded relief, a rendering, not elevation values</td>
+</tr>
+<tr>
+<td>USGS_Hydro</td>
+<td>16</td>
+<td>USGS hydrography (United States)</td>
+</tr>
+<tr>
+<td>Copernicus_Sentinel</td>
+<td>15</td>
+<td>Sentinel-2 cloudless 2023 mosaic by EOX (CC BY-NC-SA 4.0)</td>
+</tr>
+<tr>
+<td>Landsat</td>
+<td>12</td>
+<td>Landsat WELD annual true colour, NASA GIBS</td>
+</tr>
+<tr>
+<td>MODIS</td>
+<td>8</td>
+<td>Blue Marble Next Generation, MODIS composite, NASA GIBS</td>
+</tr>
+</tbody>
+</table>
+<p>Each server has its own terms of use and attribution requirements; the
+user is responsible for respecting them.</p>
+<h3>Zoom level</h3>
+<p>With <strong>zoom</strong>=<em>auto</em> (the default), the zoom level is the coarsest one
+whose tile pixel is no larger than the region resolution (with a 5 %
+tolerance, so that a 2 m region at mid latitudes uses zoom 16, whose
+pixels are about 2.0 m). It is capped at the server's highest level, with a
+warning when the region is finer than the server can deliver. A number
+from 0 to 20 forces the zoom level; a level above the server's highest one
+is an error.</p>
+<p>A Web Mercator tile pixel at zoom <em>z</em> and latitude <em>φ</em> covers
+40,075,017 · cos <em>φ</em> / (256 · 2^<em>z</em>) m: about 2.0 m at zoom 16 and 0.5 m
+at zoom 18 at 32° N.</p>
+<h3>Output</h3>
+<p>By default the red, green and blue bands are combined by <em>r.composite</em>.
+With <strong>-b</strong> the bands are kept as separate maps. Areas without tiles are
+NULL; black pixels are kept.</p>
+<h2>NOTES</h2>
+<p>The region extent is converted to WGS 84 with <em>g.region</em> <strong>-b</strong>, so any
+projected or geographic coordinate reference system selects the right
+tiles. Tiles are downloaded with <em>curl</em> in random order, with a
+descriptive User-Agent and up to three attempts per tile; HTTP errors are
+treated as failed tiles. Each tile is georeferenced by a world file whose
+origin is the centre of its upper-left pixel, mosaicked into a virtual
+raster with an alpha band, and imported with <em>r.import</em>.</p>
+<p>More than 2,500 tiles trigger a warning: tile servers limit bulk
+downloads. A smaller region or a lower zoom level reduces the number of
+tiles by four per level.</p>
+<p>Template fields for <strong>url</strong>: <code>{x}</code>, <code>{y}</code>, <code>{z}</code>, <code>{quadkey}</code>, <code>{s}</code> (a
+subdomain, a, b or c) and <code>{api_key}</code>.</p>
+<h2>EXAMPLES</h2>
+<p>List the servers:</p>
+<pre><code class="language-sh">i.basemap -l
+</code></pre>
+<p>Aerial imagery at 0.5 m (zoom 18) for the current region:</p>
+<pre><code class="language-sh">g.region n=3558300 s=3557300 w=515000 e=516000 res=0.5
+i.basemap server=Google_Satellite output=aerial
+</code></pre>
+<p>A fixed zoom level and separate bands:</p>
+<pre><code class="language-sh">i.basemap server=ESRI_WorldImagery output=esri zoom=17 -b
+</code></pre>
+<p>A server requiring an API key:</p>
+<pre><code class="language-sh">i.basemap server=Stamen_Terrain output=terrain api_key=MY_STADIA_KEY
+</code></pre>
+<p>A custom XYZ template:</p>
+<pre><code class="language-sh">i.basemap url=&quot;https://tile.example.org/{z}/{x}/{y}.png&quot; output=custom
+</code></pre>
 <h2>SEE ALSO</h2>
-
-<ul>
-<li><em><a href="r.in.gdal.html">r.in.gdal</a></em> - Import raster data using GDAL</li>
-<li><em><a href="r.in.wms.html">r.in.wms</a></em> - Download web mapping services</li>
-<li><em><a href="g.region.html">g.region</a></em> - Manage computational region</li>
-<li><em><a href="g.proj.html">g.proj</a></em> - Manage projection information</li>
-</ul>
+<p><em><a href="https://grass.osgeo.org/grass-stable/manuals/r.composite.html">r.composite</a>,
+<a href="https://grass.osgeo.org/grass-stable/manuals/r.import.html">r.import</a>,
+<a href="https://grass.osgeo.org/grass-stable/manuals/r.in.wms.html">r.in.wms</a></em></p>
+<h2>AUTHORS</h2>
+<p>Yann Chemin</p>
