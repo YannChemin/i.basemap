@@ -60,3 +60,41 @@ def test_lambert93_region_is_fully_covered(lambert93_session, server):
         assert int(stats["null_cells"]) == 0
         assert int(stats["n"]) == 500 * 500
         assert float(stats["max"]) > float(stats["min"])
+
+
+def run_basemap_result(session, **kwargs):
+    args = [sys.executable, str(SCRIPT), "-c"]
+    args += [f"{key}={value}" for key, value in kwargs.items()]
+    return subprocess.run(args, env=session.env, capture_output=True, text=True)
+
+
+def test_auto_zoom_follows_region_resolution(lambert93_session):
+    """A 0.5 m region gets zoom 18 tiles, not the former fixed maximum of 16."""
+    gs.run_command("g.region", res=0.5, env=lambert93_session.env)
+    result = run_basemap_result(lambert93_session, server="Google_Satellite", output="bm")
+    assert result.returncode == 0, result.stderr
+    assert "zoom level 18" in result.stderr
+
+
+def test_zoom_above_server_maximum_fails(lambert93_session):
+    result = run_basemap_result(lambert93_session, server="USGS_3DEP", output="bm", zoom=16)
+    assert result.returncode != 0
+    assert "highest level" in result.stderr
+
+
+def test_api_key_is_required(lambert93_session):
+    result = run_basemap_result(lambert93_session, server="Stamen_Toner", output="bm")
+    assert result.returncode != 0
+    assert "api_key" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "server", ["OSM_Humanitarian", "Copernicus_Sentinel", "Landsat", "MODIS"]
+)
+def test_replaced_servers_download(lambert93_session, server):
+    """Servers whose templates were broken or mislabelled now deliver tiles."""
+    gs.run_command("g.region", res=100, flags="a", env=lambert93_session.env)
+    result = run_basemap_result(lambert93_session, server=server, output="bm")
+    assert result.returncode == 0, result.stderr
+    stats = gs.parse_command("r.univar", map="bm.r", flags="g", env=lambert93_session.env)
+    assert int(stats["n"]) > 0
