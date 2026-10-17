@@ -127,11 +127,14 @@ import tempfile
 import random
 from osgeo import gdal
 
+gdal.UseExceptions()
+
 USER_AGENT = "i.basemap/1.1 (GRASS GIS addon; https://grass.osgeo.org)"
 
 # Try to import grass.script
 try:
     import grass.script as gs
+    from grass.exceptions import CalledModuleError
     GRASS_AVAILABLE = True
 except ImportError:
     GRASS_AVAILABLE = False
@@ -630,7 +633,10 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
         # raw palette indices mixes colours; grey tiles must be widened too.
         rgb_tiles = []
         for tile_file in tile_files:
-            src = gdal.Open(tile_file)
+            try:
+                src = gdal.Open(tile_file)
+            except RuntimeError:
+                src = None
             if src is None:
                 gs.warning(f"Cannot read tile {tile_file} - skipping")
                 continue
@@ -703,11 +709,15 @@ def download_xyz_tiles(url_template, bbox, output, maxcols, maxrows, srs, format
                 gs.fatal("Failed to create VRT from tiles. gdalbuildvrt may not be available.")
 
         # Import VRT into GRASS using r.import, which reprojects the
-        # Web Mercator tiles into the current location's CRS
+        # Web Mercator tiles into the current location's CRS. Only the
+        # current region is imported: the tile grid is larger, and in a
+        # lat/lon project r.import cannot parse a tile edge lying exactly on
+        # the equator or the prime meridian (r.proj -g prints it as "0").
         try:
-            gs.run_command('r.import', input=final_vrt, output=output, overwrite=True)
-        except:
-            gs.fatal("Failed to import VRT into GRASS. r.import may not be available.")
+            gs.run_command('r.import', input=final_vrt, output=output,
+                           extent='region', overwrite=True)
+        except CalledModuleError as e:
+            gs.fatal(f"Failed to import VRT into GRASS: {e}")
 
         # Turn the alpha band into NULLs on the colour bands, then drop it.
         # r.import names bands after their colour interpretation or index.
